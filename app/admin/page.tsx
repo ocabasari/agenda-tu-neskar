@@ -84,6 +84,14 @@ export default function AdminPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState<number | 'ALL'>(15)
 
+  // Modal Edit Siswa
+  const [selectedSiswa, setSelectedSiswa] = useState<Siswa | null>(null)
+  const [isModalEditSiswaOpen, setIsModalEditSiswaOpen] = useState(false)
+  const [editNisSiswa, setEditNisSiswa] = useState('')
+  const [editNamaSiswa, setEditNamaSiswa] = useState('')
+  const [editKelasSiswa, setEditKelasSiswa] = useState('')
+  const [savingSiswa, setSavingSiswa] = useState(false)
+
   // Form Satuan Siswa
   const [nisBaru, setNisBaru] = useState('')
   const [namaBaru, setNamaBaru] = useState('')
@@ -166,6 +174,56 @@ export default function AdminPage() {
     } else {
       alert('🗑️ Catatan transaksi berhasil dihapus.')
       setIsModalDetailOpen(false)
+      ambilData(true)
+    }
+  }
+
+  const handleBukaEditSiswa = (s: Siswa) => {
+    setSelectedSiswa(s)
+    setEditNisSiswa(s.nis)
+    setEditNamaSiswa(s.nama_siswa)
+    setEditKelasSiswa(s.kelas)
+    setIsModalEditSiswaOpen(true)
+  }
+
+  const handleSimpanEditSiswa = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedSiswa) return
+    setSavingSiswa(true)
+
+    const { error } = await supabase
+      .from('siswa')
+      .update({
+        nis: editNisSiswa.trim(),
+        nama_siswa: editNamaSiswa.trim(),
+        kelas: editKelasSiswa.trim(),
+      })
+      .eq('nis', selectedSiswa.nis)
+
+    setSavingSiswa(false)
+
+    if (error) {
+      alert('Gagal mengupdate data siswa: ' + error.message)
+    } else {
+      alert('✅ Data siswa berhasil diperbarui!')
+      setIsModalEditSiswaOpen(false)
+      setSelectedSiswa(null)
+      ambilData(true)
+    }
+  }
+
+  const handleHapusSiswa = async (s: Siswa) => {
+    if (!confirm(`Hapus siswa "${s.nama_siswa}" (${s.nis} - ${s.kelas})?`)) return
+
+    const { error } = await supabase
+      .from('siswa')
+      .delete()
+      .eq('nis', s.nis)
+
+    if (error) {
+      alert('Gagal menghapus siswa: ' + error.message)
+    } else {
+      alert('🗑️ Data siswa berhasil dihapus.')
       ambilData(true)
     }
   }
@@ -457,12 +515,13 @@ export default function AdminPage() {
                 </div>
 
                 <div className="flex-1 overflow-x-auto overflow-y-auto border border-slate-700/80 rounded-2xl max-h-[calc(100vh-310px)] bg-slate-900/40">
-                  <table className="w-full text-left border-collapse min-w-[600px]">
+                  <table className="w-full text-left border-collapse min-w-[680px]">
                     <thead>
                       <tr className="bg-slate-900 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-700 sticky top-0 z-20 shadow-sm">
                         <th className="p-3.5">NIS</th>
                         <th className="p-3.5">Nama Siswa</th>
                         <th className="p-3.5">Kelas</th>
+                        <th className="p-3.5 text-center">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="text-sm divide-y divide-slate-800">
@@ -472,10 +531,28 @@ export default function AdminPage() {
                             <td className="p-3 font-mono text-slate-300 text-xs sm:text-sm">{s.nis}</td>
                             <td className="p-3 text-white font-medium text-xs sm:text-sm">{s.nama_siswa}</td>
                             <td className="p-3 font-semibold text-blue-400 text-xs sm:text-sm">{s.kelas}</td>
+                            <td className="p-3 text-center">
+                              <div className="inline-flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleBukaEditSiswa(s)}
+                                  className="px-2.5 py-1 bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/40 rounded-lg text-xs font-bold transition"
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleHapusSiswa(s)}
+                                  className="px-2.5 py-1 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/40 rounded-lg text-xs font-bold transition"
+                                >
+                                  🗑️ Hapus
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         ))
                       ) : (
-                        <tr><td colSpan={3} className="p-8 text-center text-slate-500 text-sm">Tidak ada data siswa.</td></tr>
+                        <tr><td colSpan={4} className="p-8 text-center text-slate-500 text-sm">Tidak ada data siswa.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -667,6 +744,67 @@ export default function AdminPage() {
                 Batal
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDIT SISWA */}
+      {isModalEditSiswaOpen && selectedSiswa && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-white border-b border-slate-800 pb-3">Edit Data Siswa</h3>
+
+            <form onSubmit={handleSimpanEditSiswa} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">NIS</label>
+                <input
+                  type="text"
+                  value={editNisSiswa}
+                  onChange={(e) => setEditNisSiswa(e.target.value)}
+                  className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white font-mono text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Nama Lengkap Siswa</label>
+                <input
+                  type="text"
+                  value={editNamaSiswa}
+                  onChange={(e) => setEditNamaSiswa(e.target.value)}
+                  className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Kelas</label>
+                <input
+                  type="text"
+                  value={editKelasSiswa}
+                  onChange={(e) => setEditKelasSiswa(e.target.value)}
+                  className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={savingSiswa}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs transition shadow-lg disabled:opacity-50"
+                >
+                  {savingSiswa ? 'Menyimpan...' : '💾 Simpan Perubahan'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIsModalEditSiswaOpen(false); setSelectedSiswa(null); }}
+                  className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs transition"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
