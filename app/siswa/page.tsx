@@ -9,6 +9,34 @@ interface Siswa {
   kelas: string
 }
 
+async function fetchSemuaSiswa(): Promise<Siswa[]> {
+  const batchSize = 1000
+  let from = 0
+  let semuaData: Siswa[] = []
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('siswa')
+      .select('*')
+      .order('nama_siswa', { ascending: true })
+      .range(from, from + batchSize - 1)
+
+    if (error) {
+      console.error('Gagal mengambil data siswa:', error.message)
+      break
+    }
+
+    if (!data || data.length === 0) break
+
+    semuaData = [...semuaData, ...data]
+
+    if (data.length < batchSize) break
+    from += batchSize
+  }
+
+  return semuaData
+}
+
 export default function DataSiswaPage() {
   const [daftarSiswa, setDaftarSiswa] = useState<Siswa[]>([])
   const [loading, setLoading] = useState(true)
@@ -25,19 +53,13 @@ export default function DataSiswaPage() {
 
   async function ambilDataSiswa() {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('siswa')
-      .select('*')
-      .order('nama_siswa', { ascending: true })
-
-    if (data) {
-      setDaftarSiswa(data)
-    }
+    const sData = await fetchSemuaSiswa()
+    setDaftarSiswa(sData)
     setLoading(false)
   }
 
   const daftarKelasUnik = Array.from(new Set(daftarSiswa.map(s => s.kelas))).sort()
-  
+
   const filteredSiswa = daftarSiswa.filter(s => {
     const matchSearch = s.nama_siswa.toLowerCase().includes(searchQuery.toLowerCase()) || s.nis.includes(searchQuery)
     const matchKelas = selectedKelas === 'SEMUA' || s.kelas === selectedKelas
@@ -51,18 +73,33 @@ export default function DataSiswaPage() {
 
   return (
     <main className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-100 p-4 sm:p-6 flex flex-col justify-between antialiased">
-      
-      {/* Header Navigasi */}
+
+      {/* Header Navigasi dengan Logo Lokal */}
       <div className="w-full flex items-center justify-between mb-4">
-        <Link 
-          href="/" 
-          className="group w-11 h-11 bg-slate-800/80 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-lg"
-          title="Kembali ke Menu Utama"
-        >
-          <svg className="w-5 h-5 text-slate-300 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="group w-11 h-11 bg-slate-800/80 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-lg"
+            title="Kembali ke Menu Utama"
+          >
+            <svg className="w-5 h-5 text-slate-300 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+          </Link>
+
+          <div className="flex items-center gap-2.5 bg-slate-800/40 border border-slate-700/60 px-3.5 py-2 rounded-2xl backdrop-blur-md">
+            <img
+              src="/logo-smkn1.png"
+              alt="Logo SMKN 1 Karawang"
+              className="w-7 h-7 object-contain"
+            />
+            <div className="hidden sm:block">
+              <p className="text-xs font-bold text-white leading-tight">SMKN 1 KARAWANG</p>
+              <p className="text-[10px] text-slate-400 leading-tight">Tata Usaha</p>
+            </div>
+          </div>
+        </div>
+
         <div className="text-right">
           <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white">Direktori Data Siswa</h1>
           <p className="text-xs text-slate-400">SMKN 1 Karawang</p>
@@ -71,19 +108,19 @@ export default function DataSiswaPage() {
 
       {/* Konten Utama */}
       <div className="w-full flex-1 flex flex-col bg-slate-800/40 border border-slate-700/60 rounded-3xl shadow-2xl p-4 sm:p-6 backdrop-blur-xl space-y-4">
-        
+
         {/* Bar Pencarian & Filter */}
         <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-slate-900/60 p-3.5 rounded-2xl border border-slate-700/80">
-          <input 
-            type="text" 
-            placeholder="Cari Nama Siswa atau NIS..." 
+          <input
+            type="text"
+            placeholder="Cari Nama Siswa atau NIS..."
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
             className="w-full sm:w-80 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs sm:text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
           />
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <span className="text-xs text-slate-400 font-semibold">Kelas:</span>
-            <select 
+            <select
               value={selectedKelas}
               onChange={(e) => { setSelectedKelas(e.target.value); setCurrentPage(1); }}
               className="p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs sm:text-sm text-white outline-none font-semibold"
@@ -129,17 +166,17 @@ export default function DataSiswaPage() {
           <span>Menampilkan <strong className="text-white">{currentSiswaPage.length}</strong> dari total <strong className="text-white">{totalItems}</strong> siswa</span>
           {totalPages > 1 && (
             <div className="flex gap-2">
-              <button 
-                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} 
-                disabled={currentPage === 1} 
+              <button
+                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
                 className="px-3.5 py-1.5 bg-slate-900 border border-slate-700 text-white rounded-xl font-bold disabled:opacity-40 transition"
               >
                 ← Sebelumnya
               </button>
               <span className="px-3 py-1.5 text-slate-300 font-semibold">{currentPage} / {totalPages}</span>
-              <button 
-                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} 
-                disabled={currentPage === totalPages} 
+              <button
+                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
                 className="px-3.5 py-1.5 bg-slate-900 border border-slate-700 text-white rounded-xl font-bold disabled:opacity-40 transition"
               >
                 Berikutnya →

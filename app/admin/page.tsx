@@ -27,6 +27,34 @@ interface Siswa {
   kelas: string
 }
 
+async function fetchSemuaSiswa(): Promise<Siswa[]> {
+  const batchSize = 1000
+  let from = 0
+  let semuaData: Siswa[] = []
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('siswa')
+      .select('*')
+      .order('nama_siswa', { ascending: true })
+      .range(from, from + batchSize - 1)
+
+    if (error) {
+      console.error('Gagal mengambil data siswa:', error.message)
+      break
+    }
+
+    if (!data || data.length === 0) break
+
+    semuaData = [...semuaData, ...data]
+
+    if (data.length < batchSize) break
+    from += batchSize
+  }
+
+  return semuaData
+}
+
 export default function AdminPage() {
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false)
   const [inputPin, setInputPin] = useState('')
@@ -75,16 +103,14 @@ export default function AdminPage() {
       .select(`*, siswa:nis (nama_siswa, kelas)`)
       .order('created_at', { ascending: false })
 
-    const { data: sData } = await supabase
-      .from('siswa')
-      .select('*')
+    const sData = await fetchSemuaSiswa()
 
     if (tData) {
       const formattedTData = await Promise.all(tData.map(async (item) => {
         let namaPengembali = '-'
         let kelasPengembali = '-'
         if (item.pengembali_nis) {
-          const matched = sData?.find(s => s.nis === item.pengembali_nis)
+          const matched = sData.find(s => s.nis === item.pengembali_nis)
           if (matched) {
             namaPengembali = matched.nama_siswa
             kelasPengembali = matched.kelas
@@ -100,8 +126,8 @@ export default function AdminPage() {
       setDaftarTransaksi(formattedTData)
     }
 
-    if (sData) setDaftarSiswa(sData)
-    
+    setDaftarSiswa(sData)
+
     setLoading(false)
     if (isRefresh) setRefreshing(false)
   }
@@ -181,7 +207,7 @@ export default function AdminPage() {
         nis: String(row.nis || row.NIS || '').trim(),
         nama_siswa: String(row.nama_siswa || row.NAMA || row.nama || '').trim(),
         kelas: String(row.kelas || row.KELAS || '').trim(),
-      })).filter(row => row.nis && row.nama_siswa);
+      })).filter(row => row.nis && row.nama_siswa)
 
       setExcelData(formattedData)
       setStatusImport(`Berhasil membaca ${formattedData.length} data dari Excel.`)
@@ -207,9 +233,9 @@ export default function AdminPage() {
   const daftarKelasTransaksiUnik = Array.from(new Set(daftarTransaksi.map(t => t.siswa?.kelas).filter(Boolean))).sort() as string[]
   const filteredTransaksi = daftarTransaksi.filter(t => {
     const query = searchTransaksi.toLowerCase()
-    const matchSearch = 
-      t.nis.toLowerCase().includes(query) || 
-      t.siswa?.nama_siswa.toLowerCase().includes(query) || 
+    const matchSearch =
+      t.nis.toLowerCase().includes(query) ||
+      t.siswa?.nama_siswa.toLowerCase().includes(query) ||
       t.nama_petugas.toLowerCase().includes(query) ||
       (t.pengembali_nis && t.pengembali_nis.toLowerCase().includes(query)) ||
       (t.namaPengembali && t.namaPengembali.toLowerCase().includes(query))
@@ -236,16 +262,16 @@ export default function AdminPage() {
   const totalItems = filteredSiswa.length
   const totalPages = itemsPerPage === 'ALL' ? 1 : Math.ceil(totalItems / itemsPerPage) || 1
   const startIndex = itemsPerPage === 'ALL' ? 0 : (currentPage - 1) * (itemsPerPage as number)
-  const currentSiswaPage = itemsPerPage === 'ALL' 
-    ? filteredSiswa 
+  const currentSiswaPage = itemsPerPage === 'ALL'
+    ? filteredSiswa
     : filteredSiswa.slice(startIndex, startIndex + (itemsPerPage as number))
 
   return (
     <main className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-100 p-4 sm:p-6 flex flex-col justify-between antialiased">
-      
+
       <div className="w-full flex items-center justify-between mb-4">
-        <Link 
-          href="/" 
+        <Link
+          href="/"
           className="group w-11 h-11 bg-slate-800/80 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-lg"
           title="Kembali ke Menu Utama"
         >
@@ -265,14 +291,14 @@ export default function AdminPage() {
             <div className="w-14 h-14 bg-slate-900 border border-slate-700 rounded-full flex items-center justify-center mx-auto text-2xl shadow-inner">🔒</div>
             <h2 className="text-xl font-bold text-white">Autorisasi Admin TU</h2>
             <p className="text-xs sm:text-sm text-slate-400">Masukkan 6 digit PIN rahasia staf TU (Default: 123456).</p>
-            
+
             <form onSubmit={handleUnlock} className="space-y-3 pt-2">
-              <input 
-                type="password" 
+              <input
+                type="password"
                 maxLength={6}
                 value={inputPin}
                 onChange={(e) => setInputPin(e.target.value)}
-                placeholder="PIN Admin" 
+                placeholder="PIN Admin"
                 className="w-full p-4 bg-slate-900 border border-slate-700 rounded-2xl text-center text-lg tracking-widest outline-none font-mono text-white shadow-inner"
                 required
               />
@@ -284,7 +310,7 @@ export default function AdminPage() {
           </div>
         ) : (
           <div className="w-full flex-1 flex flex-col space-y-4">
-            
+
             <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 border-b border-slate-700/80 pb-3">
               <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full md:w-auto">
                 <button onClick={() => setSubTab('transaksi')} className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition text-center ${subTab === 'transaksi' ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-900/60 text-slate-400 hover:bg-slate-900'}`}>📊 Riwayat</button>
@@ -294,8 +320,8 @@ export default function AdminPage() {
               </div>
 
               <div className="flex gap-2">
-                <button 
-                  onClick={() => ambilData(true)} 
+                <button
+                  onClick={() => ambilData(true)}
                   disabled={refreshing}
                   className="flex-1 md:flex-none px-3.5 py-2.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs font-bold rounded-xl transition text-center flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
@@ -311,9 +337,9 @@ export default function AdminPage() {
             {subTab === 'transaksi' && (
               <div className="flex-1 flex flex-col space-y-3 overflow-hidden">
                 <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-slate-900/60 p-3 rounded-2xl border border-slate-700/80">
-                  <input 
-                    type="text" 
-                    placeholder="Cari NIS, Nama Peminjam, Pengembali, Petugas..." 
+                  <input
+                    type="text"
+                    placeholder="Cari NIS, Nama Peminjam, Pengembali, Petugas..."
                     value={searchTransaksi}
                     onChange={(e) => setSearchTransaksi(e.target.value)}
                     className="w-full lg:w-80 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs sm:text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
@@ -321,7 +347,7 @@ export default function AdminPage() {
                   <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-slate-400 font-semibold">Kelas:</span>
-                      <select 
+                      <select
                         value={filterKelasTransaksi}
                         onChange={(e) => setFilterKelasTransaksi(e.target.value)}
                         className="p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none font-semibold"
@@ -332,7 +358,7 @@ export default function AdminPage() {
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-slate-400 font-semibold">Status:</span>
-                      <select 
+                      <select
                         value={filterStatus}
                         onChange={(e) => setFilterStatus(e.target.value)}
                         className="p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none font-semibold"
@@ -372,7 +398,7 @@ export default function AdminPage() {
                                 <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${item.status === 'DIPINJAM' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'}`}>{item.status}</span>
                               </td>
                               <td className="p-3.5 text-center">
-                                <button 
+                                <button
                                   onClick={() => { setSelectedTransaksi(item); setIsModalDetailOpen(true); }}
                                   className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/40 rounded-xl text-xs font-bold transition"
                                 >
@@ -395,9 +421,9 @@ export default function AdminPage() {
             {subTab === 'siswa' && (
               <div className="flex-1 flex flex-col space-y-3">
                 <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-slate-900/60 p-3 rounded-2xl border border-slate-700/80">
-                  <input 
-                    type="text" 
-                    placeholder="Cari Nama Siswa / NIS..." 
+                  <input
+                    type="text"
+                    placeholder="Cari Nama Siswa / NIS..."
                     value={searchQuery}
                     onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                     className="w-full lg:w-72 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs sm:text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
@@ -405,7 +431,7 @@ export default function AdminPage() {
                   <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-slate-400 font-semibold">Baris:</span>
-                      <select 
+                      <select
                         value={itemsPerPage}
                         onChange={(e) => { setItemsPerPage(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value)); setCurrentPage(1); }}
                         className="p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none font-semibold"
@@ -418,7 +444,7 @@ export default function AdminPage() {
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-slate-400 font-semibold">Kelas:</span>
-                      <select 
+                      <select
                         value={selectedKelas}
                         onChange={(e) => { setSelectedKelas(e.target.value); setCurrentPage(1); }}
                         className="p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none font-semibold max-w-[150px]"
@@ -467,12 +493,12 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* TAB 3: TAMBAH (Kecil di Kiri) */}
+            {/* TAB 3: TAMBAH */}
             {subTab === 'tambah' && (
               <div className="max-w-md bg-slate-900/60 p-6 rounded-3xl border border-slate-700/80 space-y-4 shadow-xl">
                 <h3 className="font-bold text-white text-base">Tambah Siswa Satuan</h3>
                 {pesanSatuan && <div className="p-2.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-semibold rounded-xl text-center">{pesanSatuan}</div>}
-                
+
                 <form onSubmit={handleTambahSatuan} className="space-y-3">
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">NIS (8 Digit)</label>
@@ -491,22 +517,22 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* TAB 4: IMPORT (Kecil di Kiri) */}
+            {/* TAB 4: IMPORT */}
             {subTab === 'import' && (
               <div className="max-w-md bg-slate-900/60 p-6 rounded-3xl border border-slate-700/80 space-y-4 shadow-xl">
                 <h3 className="font-bold text-white text-base">Import Data dari Excel (.xlsx)</h3>
                 <p className="text-xs text-slate-400">Pastikan format kolom Excel Anda memiliki header: <code className="text-blue-400">nis</code>, <code className="text-blue-400">nama_siswa</code>, dan <code className="text-blue-400">kelas</code>.</p>
-                
+
                 <button onClick={handleDownloadTemplate} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-lg inline-flex items-center gap-2">
                   📥 Download Template Excel
                 </button>
-                
+
                 <div>
                   <input type="file" accept=".xlsx, .xls" onChange={handleFileUpload} className="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white" />
                 </div>
-                
+
                 {statusImport && <div className="p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs font-semibold text-white">{statusImport}</div>}
-                
+
                 {excelData.length > 0 && (
                   <button onClick={handleProsesImport} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold p-3 rounded-xl text-xs shadow-lg">
                     🚀 Proses Import {excelData.length} Data
@@ -574,19 +600,19 @@ export default function AdminPage() {
             </div>
 
             <div className="flex gap-2 pt-3 border-t border-slate-800">
-              <button 
+              <button
                 onClick={() => { setEditStatus(selectedTransaksi.status); setEditPetugas(selectedTransaksi.nama_petugas); setIsModalDetailOpen(false); setIsModalEditOpen(true); }}
                 className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-xs transition"
               >
                 ✏️ Edit Status / Petugas
               </button>
-              <button 
+              <button
                 onClick={() => handleHapusTransaksi(selectedTransaksi.id)}
                 className="px-4 py-2.5 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/40 rounded-xl font-bold text-xs transition"
               >
                 🗑️ Hapus
               </button>
-              <button 
+              <button
                 onClick={() => setIsModalDetailOpen(false)}
                 className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs transition"
               >
@@ -602,12 +628,12 @@ export default function AdminPage() {
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <h3 className="text-lg font-bold text-white border-b border-slate-800 pb-3">Edit Transaksi</h3>
-            
+
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Status Transaksi</label>
-                <select 
-                  value={editStatus} 
+                <select
+                  value={editStatus}
                   onChange={(e) => setEditStatus(e.target.value)}
                   className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none font-semibold"
                 >
@@ -618,9 +644,9 @@ export default function AdminPage() {
 
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Nama Petugas Piket</label>
-                <input 
-                  type="text" 
-                  value={editPetugas} 
+                <input
+                  type="text"
+                  value={editPetugas}
                   onChange={(e) => setEditPetugas(e.target.value)}
                   className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none"
                 />
@@ -628,13 +654,13 @@ export default function AdminPage() {
             </div>
 
             <div className="flex gap-2 pt-2">
-              <button 
+              <button
                 onClick={handleSimpanEdit}
                 className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs transition shadow-lg"
               >
                 💾 Simpan Perubahan
               </button>
-              <button 
+              <button
                 onClick={() => setIsModalEditOpen(false)}
                 className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs transition"
               >
