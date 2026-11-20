@@ -65,6 +65,10 @@ function toLocalDateInputValue(isoString: string): string {
   return `${year}-${month}-${day}`
 }
 
+function getTodayLocalDateInput(): string {
+  return toLocalDateInputValue(new Date().toISOString())
+}
+
 export default function AdminPage() {
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false)
   const [inputPin, setInputPin] = useState('')
@@ -76,12 +80,12 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Filter & Search Riwayat Transaksi
+  // Filter & Search Riwayat Transaksi (Default: Hari Ini)
   const [searchTransaksi, setSearchTransaksi] = useState('')
   const [filterKelasTransaksi, setFilterKelasTransaksi] = useState('SEMUA')
   const [filterStatus, setFilterStatus] = useState('SEMUA')
-  const [tanggalDari, setTanggalDari] = useState('')
-  const [tanggalSampai, setTanggalSampai] = useState('')
+  const [tanggalDari, setTanggalDari] = useState(() => getTodayLocalDateInput())
+  const [tanggalSampai, setTanggalSampai] = useState(() => getTodayLocalDateInput())
 
   // Modal Detail & Edit Transaksi
   const [selectedTransaksi, setSelectedTransaksi] = useState<Transaksi | null>(null)
@@ -360,6 +364,8 @@ export default function AdminPage() {
     ? filteredSiswa
     : filteredSiswa.slice(startIndex, startIndex + (itemsPerPage as number))
 
+  const todayStr = getTodayLocalDateInput()
+
   return (
     <main className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-100 p-4 sm:p-6 flex flex-col justify-between antialiased">
 
@@ -384,7 +390,7 @@ export default function AdminPage() {
           <div className="max-w-md mx-auto my-auto space-y-4 py-12 text-center">
             <div className="w-14 h-14 bg-slate-900 border border-slate-700 rounded-full flex items-center justify-center mx-auto text-2xl shadow-inner">🔒</div>
             <h2 className="text-xl font-bold text-white">Autorisasi Admin TU</h2>
-            <p className="text-xs sm:text-sm text-slate-400">Masukkan 6 digit PIN.</p>
+            <p className="text-xs sm:text-sm text-slate-400">Masukkan 6 digit PIN</p>
 
             <form onSubmit={handleUnlock} className="space-y-3 pt-2">
               <input
@@ -488,7 +494,17 @@ export default function AdminPage() {
                           className="p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
-                      {(tanggalDari || tanggalSampai || filterKelasTransaksi !== 'SEMUA' || filterStatus !== 'SEMUA' || searchTransaksi) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTanggalDari(todayStr)
+                          setTanggalSampai(todayStr)
+                        }}
+                        className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/40 rounded-xl text-xs font-semibold transition"
+                      >
+                        Hari Ini
+                      </button>
+                      {(tanggalDari !== todayStr || tanggalSampai !== todayStr || filterKelasTransaksi !== 'SEMUA' || filterStatus !== 'SEMUA' || searchTransaksi) && (
                         <button
                           type="button"
                           onClick={() => {
@@ -500,7 +516,7 @@ export default function AdminPage() {
                           }}
                           className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold transition"
                         >
-                          Reset Filter
+                          Semua Tanggal
                         </button>
                       )}
                     </div>
