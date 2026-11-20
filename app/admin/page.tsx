@@ -56,8 +56,8 @@ async function fetchSemuaSiswa(): Promise<Siswa[]> {
   return semuaData
 }
 
-function toLocalDateInputValue(isoString: string): string {
-  const d = new Date(isoString)
+function toLocalDateInputValue(dateInput: string | Date): string {
+  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
   if (Number.isNaN(d.getTime())) return ''
   const year = d.getFullYear()
   const month = String(d.getMonth() + 1).padStart(2, '0')
@@ -66,7 +66,7 @@ function toLocalDateInputValue(isoString: string): string {
 }
 
 function getTodayLocalDateInput(): string {
-  return toLocalDateInputValue(new Date().toISOString())
+  return toLocalDateInputValue(new Date())
 }
 
 export default function AdminPage() {
@@ -80,12 +80,12 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Filter & Search Riwayat Transaksi (Default: Hari Ini)
+  // Filter & Search Riwayat Transaksi (Default: Hari Ini untuk Dari & Sampai)
   const [searchTransaksi, setSearchTransaksi] = useState('')
   const [filterKelasTransaksi, setFilterKelasTransaksi] = useState('SEMUA')
   const [filterStatus, setFilterStatus] = useState('SEMUA')
-  const [tanggalDari, setTanggalDari] = useState(() => getTodayLocalDateInput())
-  const [tanggalSampai, setTanggalSampai] = useState(() => getTodayLocalDateInput())
+  const [tanggalDari, setTanggalDari] = useState<string>(() => getTodayLocalDateInput())
+  const [tanggalSampai, setTanggalSampai] = useState<string>(() => getTodayLocalDateInput())
 
   // Modal Detail & Edit Transaksi
   const [selectedTransaksi, setSelectedTransaksi] = useState<Transaksi | null>(null)
@@ -170,6 +170,9 @@ export default function AdminPage() {
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault()
     if (inputPin === '09876') {
+      const today = getTodayLocalDateInput()
+      setTanggalDari(today)
+      setTanggalSampai(today)
       setIsAdminUnlocked(true)
       ambilData(false)
     } else {
@@ -390,7 +393,7 @@ export default function AdminPage() {
           <div className="max-w-md mx-auto my-auto space-y-4 py-12 text-center">
             <div className="w-14 h-14 bg-slate-900 border border-slate-700 rounded-full flex items-center justify-center mx-auto text-2xl shadow-inner">🔒</div>
             <h2 className="text-xl font-bold text-white">Autorisasi Admin TU</h2>
-            <p className="text-xs sm:text-sm text-slate-400">Masukkan 6 digit PIN</p>
+            <p className="text-xs sm:text-sm text-slate-400">Masukkan 6 digit PIN.</p>
 
             <form onSubmit={handleUnlock} className="space-y-3 pt-2">
               <input
