@@ -17,6 +17,7 @@ interface Transaksi {
   foto_pengembalian?: string
   waktu_kembali?: string
   siswa?: { nama_siswa: string; kelas: string }
+  kelasTransaksi?: string
   namaPengembali?: string
   kelasPengembali?: string
 }
@@ -55,6 +56,15 @@ async function fetchSemuaSiswa(): Promise<Siswa[]> {
   return semuaData
 }
 
+function toLocalDateInputValue(isoString: string): string {
+  const d = new Date(isoString)
+  if (Number.isNaN(d.getTime())) return ''
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export default function AdminPage() {
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false)
   const [inputPin, setInputPin] = useState('')
@@ -70,6 +80,8 @@ export default function AdminPage() {
   const [searchTransaksi, setSearchTransaksi] = useState('')
   const [filterKelasTransaksi, setFilterKelasTransaksi] = useState('SEMUA')
   const [filterStatus, setFilterStatus] = useState('SEMUA')
+  const [tanggalDari, setTanggalDari] = useState('')
+  const [tanggalSampai, setTanggalSampai] = useState('')
 
   // Modal Detail & Edit Transaksi
   const [selectedTransaksi, setSelectedTransaksi] = useState<Transaksi | null>(null)
@@ -114,7 +126,13 @@ export default function AdminPage() {
     const sData = await fetchSemuaSiswa()
 
     if (tData) {
-      const formattedTData = await Promise.all(tData.map(async (item) => {
+      const formattedTData = tData.map((item) => {
+        const siswaObj = Array.isArray(item.siswa) ? item.siswa[0] : item.siswa
+        const peminjamMatch = sData.find(s => s.nis === item.nis)
+
+        const namaPeminjam = siswaObj?.nama_siswa || peminjamMatch?.nama_siswa || '-'
+        const kelasTransaksi = siswaObj?.kelas || peminjamMatch?.kelas || '-'
+
         let namaPengembali = '-'
         let kelasPengembali = '-'
         if (item.pengembali_nis) {
@@ -124,13 +142,18 @@ export default function AdminPage() {
             kelasPengembali = matched.kelas
           }
         }
+
         return {
           ...item,
-          siswa: Array.isArray(item.siswa) ? item.siswa[0] : item.siswa,
+          siswa: {
+            nama_siswa: namaPeminjam,
+            kelas: kelasTransaksi,
+          },
+          kelasTransaksi,
           namaPengembali,
-          kelasPengembali
+          kelasPengembali,
         }
-      }))
+      })
       setDaftarTransaksi(formattedTData)
     }
 
@@ -142,7 +165,7 @@ export default function AdminPage() {
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault()
-    if (inputPin === '09876') {
+    if (inputPin === '123456') {
       setIsAdminUnlocked(true)
       ambilData(false)
     } else {
@@ -288,20 +311,33 @@ export default function AdminPage() {
     }
   }
 
-  const daftarKelasTransaksiUnik = Array.from(new Set(daftarTransaksi.map(t => t.siswa?.kelas).filter(Boolean))).sort() as string[]
+  const daftarKelasTransaksiUnik = Array.from(
+    new Set(
+      daftarTransaksi
+        .map(t => t.kelasTransaksi || t.siswa?.kelas)
+        .filter((k): k is string => Boolean(k && k !== '-'))
+    )
+  ).sort()
+
   const filteredTransaksi = daftarTransaksi.filter(t => {
     const query = searchTransaksi.toLowerCase()
+    const kelasItem = t.kelasTransaksi || t.siswa?.kelas || '-'
     const matchSearch =
       t.nis.toLowerCase().includes(query) ||
-      t.siswa?.nama_siswa.toLowerCase().includes(query) ||
+      (t.siswa?.nama_siswa || '').toLowerCase().includes(query) ||
+      kelasItem.toLowerCase().includes(query) ||
       t.nama_petugas.toLowerCase().includes(query) ||
       (t.pengembali_nis && t.pengembali_nis.toLowerCase().includes(query)) ||
       (t.namaPengembali && t.namaPengembali.toLowerCase().includes(query))
 
-    const matchKelas = filterKelasTransaksi === 'SEMUA' || t.siswa?.kelas === filterKelasTransaksi
+    const matchKelas = filterKelasTransaksi === 'SEMUA' || kelasItem === filterKelasTransaksi
     const matchStatus = filterStatus === 'SEMUA' || t.status === filterStatus
 
-    return matchSearch && matchKelas && matchStatus
+    const tglPinjamLocal = toLocalDateInputValue(t.created_at)
+    const matchDari = !tanggalDari || (tglPinjamLocal !== '' && tglPinjamLocal >= tanggalDari)
+    const matchSampai = !tanggalSampai || (tglPinjamLocal !== '' && tglPinjamLocal <= tanggalSampai)
+
+    return matchSearch && matchKelas && matchStatus && matchDari && matchSampai
   })
 
   const daftarKelasUnik = Array.from(new Set(daftarSiswa.map(s => s.kelas))).sort()
@@ -348,7 +384,7 @@ export default function AdminPage() {
           <div className="max-w-md mx-auto my-auto space-y-4 py-12 text-center">
             <div className="w-14 h-14 bg-slate-900 border border-slate-700 rounded-full flex items-center justify-center mx-auto text-2xl shadow-inner">🔒</div>
             <h2 className="text-xl font-bold text-white">Autorisasi Admin TU</h2>
-            <p className="text-xs sm:text-sm text-slate-400">Masukkan 6 digit PIN</p>
+            <p className="text-xs sm:text-sm text-slate-400">Masukkan 6 digit PIN rahasia staf TU (Default: 123456).</p>
 
             <form onSubmit={handleUnlock} className="space-y-3 pt-2">
               <input
@@ -394,43 +430,88 @@ export default function AdminPage() {
             {/* TAB 1: RIWAYAT */}
             {subTab === 'transaksi' && (
               <div className="flex-1 flex flex-col space-y-3 overflow-hidden">
-                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-slate-900/60 p-3 rounded-2xl border border-slate-700/80">
-                  <input
-                    type="text"
-                    placeholder="Cari NIS, Nama Peminjam, Pengembali, Petugas..."
-                    value={searchTransaksi}
-                    onChange={(e) => setSearchTransaksi(e.target.value)}
-                    className="w-full lg:w-80 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs sm:text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-400 font-semibold">Kelas:</span>
-                      <select
-                        value={filterKelasTransaksi}
-                        onChange={(e) => setFilterKelasTransaksi(e.target.value)}
-                        className="p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none font-semibold"
-                      >
-                        <option value="SEMUA">Semua Kelas</option>
-                        {daftarKelasTransaksiUnik.map((kls) => <option key={kls} value={kls}>{kls}</option>)}
-                      </select>
+                <div className="flex flex-col gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-700/80">
+                  <div className="flex flex-col lg:flex-row gap-3 items-center justify-between">
+                    <input
+                      type="text"
+                      placeholder="Cari NIS, Nama Peminjam, Pengembali, Kelas, Petugas..."
+                      value={searchTransaksi}
+                      onChange={(e) => setSearchTransaksi(e.target.value)}
+                      className="w-full lg:w-80 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs sm:text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-400 font-semibold">Kelas:</span>
+                        <select
+                          value={filterKelasTransaksi}
+                          onChange={(e) => setFilterKelasTransaksi(e.target.value)}
+                          className="p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none font-semibold"
+                        >
+                          <option value="SEMUA">Semua Kelas</option>
+                          {daftarKelasTransaksiUnik.map((kls) => <option key={kls} value={kls}>{kls}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-400 font-semibold">Status:</span>
+                        <select
+                          value={filterStatus}
+                          onChange={(e) => setFilterStatus(e.target.value)}
+                          className="p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none font-semibold"
+                        >
+                          <option value="SEMUA">Semua Status</option>
+                          <option value="DIPINJAM">DIPINJAM</option>
+                          <option value="DIKEMBALIKAN">DIKEMBALIKAN</option>
+                        </select>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-400 font-semibold">Status:</span>
-                      <select
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        className="p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none font-semibold"
-                      >
-                        <option value="SEMUA">Semua Status</option>
-                        <option value="DIPINJAM">DIPINJAM</option>
-                        <option value="DIKEMBALIKAN">DIKEMBALIKAN</option>
-                      </select>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <label htmlFor="tgl-dari" className="text-xs text-slate-400 font-semibold">Dari Tanggal:</label>
+                        <input
+                          id="tgl-dari"
+                          type="date"
+                          value={tanggalDari}
+                          onChange={(e) => setTanggalDari(e.target.value)}
+                          className="p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <label htmlFor="tgl-sampai" className="text-xs text-slate-400 font-semibold">Sampai Tanggal:</label>
+                        <input
+                          id="tgl-sampai"
+                          type="date"
+                          value={tanggalSampai}
+                          onChange={(e) => setTanggalSampai(e.target.value)}
+                          className="p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      {(tanggalDari || tanggalSampai || filterKelasTransaksi !== 'SEMUA' || filterStatus !== 'SEMUA' || searchTransaksi) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchTransaksi('')
+                            setFilterKelasTransaksi('SEMUA')
+                            setFilterStatus('SEMUA')
+                            setTanggalDari('')
+                            setTanggalSampai('')
+                          }}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold transition"
+                        >
+                          Reset Filter
+                        </button>
+                      )}
                     </div>
+                    <span className="text-xs text-slate-400">
+                      Menampilkan <strong className="text-white">{filteredTransaksi.length}</strong> transaksi
+                    </span>
                   </div>
                 </div>
 
                 <div className="flex-1 flex flex-col overflow-hidden border border-slate-700/80 rounded-2xl bg-slate-900/40">
-                  <div className="overflow-y-auto max-h-[calc(100vh-320px)]">
+                  <div className="overflow-y-auto max-h-[calc(100vh-360px)]">
                     <table className="w-full text-left border-collapse min-w-[1100px]">
                       <thead>
                         <tr className="bg-slate-900 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-700 sticky top-0 z-20">
@@ -450,7 +531,7 @@ export default function AdminPage() {
                               <td className="p-3.5 text-slate-400 text-xs">{new Date(item.created_at).toLocaleString('id-ID')}</td>
                               <td className="p-3.5 font-medium text-white">{item.nis} - {item.siswa?.nama_siswa || '-'}</td>
                               <td className="p-3.5 font-medium text-indigo-300">{item.pengembali_nis ? `${item.pengembali_nis} - ${item.namaPengembali}` : '-'}</td>
-                              <td className="p-3.5 text-slate-300">{item.siswa?.kelas || '-'}</td>
+                              <td className="p-3.5 font-semibold text-blue-400">{item.kelasTransaksi || item.siswa?.kelas || '-'}</td>
                               <td className="p-3.5 text-slate-300">{item.nama_petugas}</td>
                               <td className="p-3.5">
                                 <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${item.status === 'DIPINJAM' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'}`}>{item.status}</span>
@@ -636,7 +717,7 @@ export default function AdminPage() {
                 <div>
                   <p className="text-slate-400 text-xs">Peminjam Awal:</p>
                   <p className="font-semibold text-white">{selectedTransaksi.nis} - {selectedTransaksi.siswa?.nama_siswa}</p>
-                  <p className="text-blue-400 font-semibold">Kelas: {selectedTransaksi.siswa?.kelas}</p>
+                  <p className="text-blue-400 font-semibold">Kelas: {selectedTransaksi.kelasTransaksi || selectedTransaksi.siswa?.kelas || '-'}</p>
                   <p className="text-slate-400 text-xs mt-1">Waktu: {new Date(selectedTransaksi.created_at).toLocaleString('id-ID')}</p>
                 </div>
                 <div>
